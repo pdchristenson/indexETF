@@ -1,19 +1,17 @@
 import models.spyderNet
+from alpha_vantage.timeseries import TimeSeries
 import torch.nn as nn
 from torch import *
+from torch.utils.data import Dataset
 import numpy as np
 import config.data
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 import torch.optim as optim
+from config.data import TimeSeriesDataset
 
-stockData = config.data.downloadData()
-sPyder = models.spyderNet()
-criterion = nn.MSELoss()
-optimizer = optim.Adam(sPyder.parameters(), lr=stockData["training"]["learning_rate"], betas=(0.9,0.98), eps=1e-9) #try dif optimizer?
-scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=stockData["training"]["scheduler_step_size"], gamma=0.1)
-trainDataLoader = DataLoader(datasetTrain, batch_size=config["training"]["batch_size"], shuffle=True)
-valDataLoader = DataLoader(datasetVal, batch_size=config["training"]["batch_size"], shuffle=True)
+stockData = config.data
+data_close_price = stockData.data_close_price
 
 class Normalizer():
     def __init__(self):
@@ -28,12 +26,58 @@ class Normalizer():
  
     def inverse_transform(self, x):
         return (x*self.sd) +self.mu
-    
+  
 
 
+def prepare_data_x(x, window_size):
+    #windowing
+    n_row = x.shape[0] - window_size +1
+    output = np.lib.stride_tricks.as_strided(x, shape=(n_row, window_size), strides=(x.strides[0], x.strides[0]))
+    return output[:-1], output[-1]
+
+
+def prepare_data_y(x, window_size):
+    #simple moving avg
+    # output = np.convolve(x, np.ones(window_size), 'valid') / window_size
+
+    #use next day as label
+    output = x[window_size:]
+    return output
 #Normalize //??
 scaler = Normalizer()
 normalized_data_close_price = scaler.fit_transform(data_close_price)
+
+
+
+
+dataX, dataXUnseen = prepare_data_x(normalized_data_close_price, window_size=config["data"]["window_size"])
+dataY = prepare_data_y(normalized_data_close_price, window_size=config["data"]["window_size"])
+
+dataX, dataXUnseen = prepare_data_x(normalized_data_close_price, window_size=config["data"]["window_size"])
+dataY = prepare_data_y(normalized_data_close_price, window_size=config["data"]["window_size"])
+
+# split dataset
+splitIndex = int(dataY.shape[0]*config["data"]["train_split_size"])
+dataXTtrain = dataX[:splitIndex]
+dataXVal = dataX[splitIndex:]
+dataYTrain = dataY[:splitIndex].reshape(-1)
+dataYVal = dataY[splitIndex:].reshape(-1)
+# dataYTrain = dataY[:splitIndex]
+# dataYVal = dataY[splitIndex:]
+    
+
+
+datasetTrain = TimeSeriesDataset(dataXTtrain, dataYTrain)
+sPyder = models.spyderNet()
+criterion = nn.MSELoss()
+optimizer = optim.Adam(sPyder.parameters(), lr=stockData["training"]["learning_rate"], betas=(0.9,0.98), eps=1e-9) #try dif optimizer?
+scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=stockData["training"]["scheduler_step_size"], gamma=0.1)
+trainDataLoader = DataLoader(datasetTrain, batch_size=config["training"]["batch_size"], shuffle=True)
+valDataLoader = DataLoader(datasetVal, batch_size=config["training"]["batch_size"], shuffle=True)
+
+  
+
+
 
 
 def run_epoch(dataloader, is_training=False):
