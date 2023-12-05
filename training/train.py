@@ -8,10 +8,20 @@ import config.data
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 import torch.optim as optim
+from config import data
 from config.data import TimeSeriesDataset
+import plot
+import matplotlib as plt
 
-stockData = config.data
-data_close_price = stockData.data_close_price
+etfData = config.data
+data_close_price = etfData.data_close_price
+
+def getRandomBatch():
+
+    rnd = random.randrange(2,15)
+
+    x = math.exp2(rnd) 
+    return int(x)
 
 class Normalizer():
     def __init__(self):
@@ -47,12 +57,6 @@ def prepare_data_y(x, window_size):
 scaler = Normalizer()
 normalized_data_close_price = scaler.fit_transform(data_close_price)
 
-
-
-
-dataX, dataXUnseen = prepare_data_x(normalized_data_close_price, window_size=config["data"]["window_size"])
-dataY = prepare_data_y(normalized_data_close_price, window_size=config["data"]["window_size"])
-
 dataX, dataXUnseen = prepare_data_x(normalized_data_close_price, window_size=config["data"]["window_size"])
 dataY = prepare_data_y(normalized_data_close_price, window_size=config["data"]["window_size"])
 
@@ -64,14 +68,29 @@ dataYTrain = dataY[:splitIndex].reshape(-1)
 dataYVal = dataY[splitIndex:].reshape(-1)
 # dataYTrain = dataY[:splitIndex]
 # dataYVal = dataY[splitIndex:]
-    
+#prep for plotting
+toPlotDataYTrain = np.zeros(etfData.num_data_points)
+toPlotDataYVal = np.zeros(etfData.num_data_points)
+
+toPlotDataYTrain[etfData.config["data"]["window_size"]:etfData.splitIndex+etfData.config["data"]["window_size"]] = etfData.scaler.inverse_transform(dataYTrain)
+toPlotDataYVal[splitIndex+etfData.config["data"]["window_size"]:] = scaler.inverse_transform(dataYVal) # split the index in training, dont need to do it here
+
+toPlotDataYTrain = np.where(toPlotDataYTrain == 0, None, toPlotDataYTrain)
+toPlotDataYVal = np.where(toPlotDataYVal == 0, None, toPlotDataYVal)
+
 
 
 datasetTrain = TimeSeriesDataset(dataXTtrain, dataYTrain)
+datasetVal = TimeSeriesDataset(dataXVal, dataYVal)
+
+print(f'Train data shape X: {datasetTrain.x.shape} Y: {datasetTrain.y.shape}')
+print(f'Validation data shape X: {datasetVal.x.shape} Y: {datasetVal.y.shape}')
+
+
 sPyder = models.spyderNet()
 criterion = nn.MSELoss()
-optimizer = optim.Adam(sPyder.parameters(), lr=stockData["training"]["learning_rate"], betas=(0.9,0.98), eps=1e-9) #try dif optimizer?
-scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=stockData["training"]["scheduler_step_size"], gamma=0.1)
+optimizer = optim.Adam(sPyder.parameters(), lr=etfData.config["training"]["learning_rate"], betas=(0.9,0.98), eps=1e-9) #try dif optimizer?
+scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=etfData.config["training"]["scheduler_step_size"], gamma=0.1)
 trainDataLoader = DataLoader(datasetTrain, batch_size=config["training"]["batch_size"], shuffle=True)
 valDataLoader = DataLoader(datasetVal, batch_size=config["training"]["batch_size"], shuffle=True)
 
@@ -95,8 +114,8 @@ def run_epoch(dataloader, is_training=False):
 
         batchsize = x.shape[0]
 
-        x = x.to(stockData["training"]["device"])
-        y = y.to(stockData["training"]["device"])
+        x = x.to(etfData.config["training"]["device"])
+        y = y.to(etfData.config["training"]["device"])
         
         out = sPyder(x)
         loss = criterion(out.contiguous(), y.contiguous())

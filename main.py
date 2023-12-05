@@ -18,14 +18,24 @@ from PIL import ImageTk, Image
 import models.spyderNet
 from alpha_vantage.timeseries import TimeSeries 
 import config.data
+import training.train
+import plot.plot
 
 model = models.spyderNet
 configData = config.data.downloadData()
-datasetTrain = TimeSeriesDataset(dataXTtrain, dataYTrain);
-datasetVal = TimeSeriesDataset(dataXVal, dataYVal)
+# datasetTrain = TimeSeriesDataset(dataXTtrain, dataYTrain);
+# datasetVal = TimeSeriesDataset(dataXVal, dataYVal)
 
-print(f'Train data shape X: {datasetTrain.x.shape} Y: {datasetTrain.y.shape}')
-print(f'Validation data shape X: {datasetVal.x.shape} Y: {datasetVal.y.shape}')
+# print(f'Train data shape X: {datasetTrain.x.shape} Y: {datasetTrain.y.shape}')
+# print(f'Validation data shape X: {datasetVal.x.shape} Y: {datasetVal.y.shape}')
+
+#*****************MAY NOT NEED*****************
+datasetTrain = training.train.datasetTrain
+datasetVal = training.train.datasetVal
+
+
+
+#*****************MAY NOT NEED*****************
 
 trainDataLoader = DataLoader(datasetTrain, batch_size=config["training"]["batch_size"], shuffle=True)
 valDataLoader = DataLoader(datasetVal, batch_size=config["training"]["batch_size"], shuffle=True)
@@ -47,7 +57,9 @@ for idx, (x,y) in enumerate(trainDataLoader):
 
 #predict on val data to see model performance
  
-predicted_val = np.array([])
+predicted_val = np.array([]) #prob not in plot? preds should be in main
+#something like trainPredictionPlot = plot.predTrainPlot() -- 
+# valPredictionPlot = plot.predValPlot()
 
 for idc, (x,y) in enumerate(valDataLoader):
     x = x.to(config["training"]["device"])
@@ -56,11 +68,13 @@ for idc, (x,y) in enumerate(valDataLoader):
     predicted_val = np.concatenate((predicted_val, out))
 
 model.eval()
-
+dataXUnseen = training.train.dataXUnseen
+toPlotDataYTestPred = plot.plot.toPlotDataYTestPred
+plot_range = plot.plot.plot_range
 x = torch.tensor(dataXUnseen).float().to(config["training"]["device"]).unsqueeze(1) #this is dType and shape required [batch, sequence, feature]
 x= x.unsqueeze(0)
 prediction = model(x)
-prediction = prediction.cpu().detach().numpy()
+prediction = prediction.cpu().detach().numpy() # need cuda
 print(f'prediction is: {prediction}')
 
 

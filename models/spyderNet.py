@@ -9,8 +9,7 @@ class LSTMMODEL(nn.Module):
 
         self.linear_1 = nn.Linear(input_size, hidden_layer_size)
         self.relu = nn.ReLU()
-        self.lstm = nn.LSTM(hidden_layer_size, hidden_size = hidden_layer_size, num_layers=num_layers,
-                            batch_first=True)
+        self.lstm = nn.LSTM(hidden_layer_size, hidden_size = hidden_layer_size, num_layers=num_layers, batch_first=True)
         self.dropout = nn.Dropout(dropout)
         self.linear_2 = nn.Linear(num_layers*hidden_layer_size, output_size)
         #self.hidden = (torch.zeros(1,1,hidden_size), torch.zeros(1,1,hidden_size)) 
